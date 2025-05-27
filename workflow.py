@@ -15,11 +15,11 @@ def write_to_postgres(dataframe, table_name, db_url):
 @flow
 def load_multiple_csvs():
     csv_table_list = [
-        ("C:/Users/johan/Desktop/Johan/DM-TUC-24/Bank_test/data/transactions.csv", "transactions"),
-        ("C:/Users/johan/Desktop/Johan/DM-TUC-24/Bank_test/data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
+        ("/Users/thomasrosen/Documents/Dev/DATA24STO/Datakvalitet/Bank_Projekt/data/transactions.csv", "transactions"),
+        ("/Users/thomasrosen/Documents/Dev/DATA24STO/Datakvalitet/Bank_Projekt/data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
     ]
 
-    db_url = "postgresql://postgres:Jason.Chen241194@localhost:5544/bank_db"
+    db_url = "postgresql://:postgres@localhost:5432/bank"
 
     for csv_path, table_name in csv_table_list:
         df = import_csv(csv_path)
