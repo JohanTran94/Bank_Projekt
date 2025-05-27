@@ -1,6 +1,11 @@
 from prefect import flow, task
 import pandas as pd
 from sqlalchemy import create_engine
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+db_url = os.getenv("DB_URL")
 
 @task
 def import_csv(csv_path):
@@ -8,22 +13,20 @@ def import_csv(csv_path):
     return dataframe
 
 @task
-def write_to_postgres(dataframe, table_name, db_url):
+def write_to_postgres(dataframe, table_name):
     engine = create_engine(db_url)
     dataframe.to_sql(table_name, engine, if_exists='append', index=False, method='multi')
 
 @flow
-def load_multiple_csvs():
+def load_multiple_csv():
     csv_table_list = [
-        ("C:/Users/johan/Desktop/Johan/DM-TUC-24/Bank_test/data/transactions.csv", "transactions"),
-        ("C:/Users/johan/Desktop/Johan/DM-TUC-24/Bank_test/data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
+        ("data/transactions.csv", "transactions"),
+        ("data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
     ]
-
-    db_url = "postgresql://postgres:Jason.Chen241194@localhost:5544/bank_db"
 
     for csv_path, table_name in csv_table_list:
         df = import_csv(csv_path)
-        write_to_postgres(df, table_name, db_url)
+        write_to_postgres(df, table_name)
 
 if __name__ == "__main__":
-    load_multiple_csvs()
+    load_multiple_csv()
