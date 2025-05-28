@@ -15,7 +15,7 @@ class Db:
         return psycopg2.connect(
             dbname='bank',
             user='postgres',
-            password='root',
+            password='intedin123',
             host='localhost',
             port='5432'
         )
