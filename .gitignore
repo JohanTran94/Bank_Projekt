@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 db.py
 .env
+=======
+alembic.ini
+>>>>>>> origin/master
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -131,6 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.env
 .venv
 env/
 venv/
