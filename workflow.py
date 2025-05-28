@@ -20,8 +20,8 @@ def write_to_postgres(dataframe, table_name):
 @flow
 def load_multiple_csv():
     csv_table_list = [
-        ("data/transactions.csv", "transactions"),
-        ("data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
+        ("/Users/jonaslarsson/PycharmProjects/Bank_Projekt/data/transactions.csv", "transactions"),
+        ("/Users/jonaslarsson/PycharmProjects/Bank_Projekt/data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
     ]
 
     for csv_path, table_name in csv_table_list:
