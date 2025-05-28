@@ -3,14 +3,29 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
+<<<<<<< HEAD
         <entry key="/data/sebank_customers_with_accounts.csv">
+=======
+        <entry key="\data\sebank_customers_with_accounts.csv">
+>>>>>>> origin/master
           <value>
             <Attribute>
               <option name="separator" value="," />
             </Attribute>
           </value>
         </entry>
+<<<<<<< HEAD
         <entry key="/data/sebank_customers_with_accounts_original.csv">
+=======
+        <entry key="\data\sebank_customers_with_accounts_original.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\data\transactions.csv">
+>>>>>>> origin/master
           <value>
             <Attribute>
               <option name="separator" value="," />
