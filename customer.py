@@ -29,7 +29,7 @@ class Customer:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM customers WHERE ssn = %s", [ssn])
         customer = cursor.fetchone()
-        if(customer[0]):
+        if customer is not None and customer[0]:
             print(f"Customer loaded.")
             self.id = customer[0]
             self.name = customer[1]

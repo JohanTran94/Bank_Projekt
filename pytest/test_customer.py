@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from customer import Customer
+from account import Account
 
 @pytest.fixture
 def mock_conn_cursor():
@@ -13,47 +14,61 @@ def mock_conn_cursor():
 
 @pytest.fixture
 def customer_instance(mock_conn_cursor):
-    customer = Customer()
-    return customer
+    cust = Customer()
+    return cust
 
-def test_create_customer(mock_conn_cursor, customer_instance):
-    mock_conn, mock_cursor = mock_conn_cursor
-    customer_instance.create_customer('John Doe', 'john@example.com')
-
-    mock_cursor.execute.assert_called_once_with(
-        "INSERT INTO customers (name, email) VALUES (%s, %s)",
-        ('John Doe', 'john@example.com')
-    )
-    mock_conn.commit.assert_called_once()
-
-def test_get_customer_by_id(mock_conn_cursor, customer_instance):
-    mock_conn, mock_cursor = mock_conn_cursor
-    mock_cursor.fetchone.return_value = (1, 'John Doe', 'john@example.com')
-
-    result = customer_instance.get_customer_by_id(1)
-
-    mock_cursor.execute.assert_called_once_with(
-        "SELECT * FROM customers WHERE id = %s", (1,)
-    )
-    assert result == (1, 'John Doe', 'john@example.com')
-
-def test_update_customer_email(mock_conn_cursor, customer_instance):
+def test_create_customer_success(mock_conn_cursor, customer_instance):
     mock_conn, mock_cursor = mock_conn_cursor
 
-    customer_instance.update_customer_email(1, 'new@example.com')
+    mock_cursor.fetchone.return_value = (1, 'Test Name', '1234567890')
+    customer_instance.get = MagicMock(return_value=customer_instance)
 
-    mock_cursor.execute.assert_called_once_with(
-        "UPDATE customers SET email = %s WHERE id = %s",
-        ('new@example.com', 1)
+    result = customer_instance.create('Test Name', '1234567890')
+
+    mock_cursor.execute.assert_called_with(
+        "INSERT INTO customers (name, ssn) VALUES (%s, %s)",
+        ['Test Name', '1234567890']
     )
-    mock_conn.commit.assert_called_once()
+    customer_instance.get.assert_called_with('1234567890')
+    assert result == customer_instance
 
-def test_delete_customer(mock_conn_cursor, customer_instance):
+def test_get_customer_found(mock_conn_cursor, customer_instance):
     mock_conn, mock_cursor = mock_conn_cursor
 
-    customer_instance.delete_customer(1)
+    mock_cursor.fetchone.return_value = (1, 'Test Name', '1234567890')
+    customer_instance.get_accounts = MagicMock(return_value=['acc1', 'acc2'])
 
-    mock_cursor.execute.assert_called_once_with(
-        "DELETE FROM customers WHERE id = %s", (1,)
+    result = customer_instance.get('1234567890')
+
+    mock_cursor.execute.assert_called_with(
+        "SELECT * FROM customers WHERE ssn = %s",
+        ['1234567890']
     )
-    mock_conn.commit.assert_called_once()
+    assert result.id == 1
+    assert result.name == 'Test Name'
+    assert result.ssn == '1234567890'
+    assert result.accounts == ['acc1', 'acc2']
+
+def test_get_customer_not_found(mock_conn_cursor, customer_instance):
+    mock_conn, mock_cursor = mock_conn_cursor
+
+    mock_cursor.fetchone.return_value = None
+    result = customer_instance.get('notexist')
+
+    assert result is None
+
+def test_get_accounts(mock_conn_cursor, customer_instance):
+    mock_conn, mock_cursor = mock_conn_cursor
+
+    customer_instance.id = 1
+
+    mock_cursor.fetchall.return_value = [
+        (1, 1, 1, 'Personal', '1111-1111', 0),
+        (2, 1, 1, 'Savings', '1111-2222', 0)
+    ]
+
+    with patch('customer.Account.get') as mock_get:
+        mock_get.side_effect = lambda nr: f"Account-{nr}"
+        accounts = customer_instance.get_accounts()
+
+    assert accounts == ['Account-1111-1111', 'Account-1111-2222']
