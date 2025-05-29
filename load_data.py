@@ -14,7 +14,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
 # ------------- 🧱 batch_insert ----------------
-def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=1000):
+def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500):
     for start in range(0, len(df), chunk_size):
         chunk = df.iloc[start:start + chunk_size]
         try:

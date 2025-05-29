@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, DateTime, Text, JSON
 from sqlalchemy.orm import declarative_base, relationship
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -53,3 +54,15 @@ class Transaction(Base):
     transaction_type = Column(String)
     location_id = Column(Integer, ForeignKey("transaction_locations.id"))
     notes = Column(String)
+
+class ErrorRow(Base):
+    __tablename__ = 'error_rows'
+
+    id = Column(Integer, primary_key=True)
+    context = Column(Text, nullable=False)
+    error_reason = Column(Text, nullable=False)
+    raw_data = Column(JSON, nullable=False)
+    logged_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ErrorRow(context='{self.context}', reason='{self.error_reason}')>"
