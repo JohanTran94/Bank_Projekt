@@ -16,7 +16,6 @@ from models import Customer, Account, TransactionLocation, Transaction  # 🧠 D
 # Skapa alla tabeller
 if __name__ == "__main__":
     Base.metadata.drop_all(engine)   # 💣 Tar bort tabeller (valfritt men bra i början)
-    print(Base.metadata.tables.keys())
     Base.metadata.create_all(engine)
     print("✅ Databasen har initierats från models.py")
-    print("Ansluter till:", DATABASE_URL)
+
