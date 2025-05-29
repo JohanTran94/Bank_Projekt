@@ -44,13 +44,12 @@ class TransactionLocation(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
-
-    transaction_id = Column(Text, primary_key=True)
+    transaction_id = Column(String, primary_key=True)
     timestamp = Column(DateTime)
     amount = Column(Float)
-    currency = Column(Text)
-    sender_account = Column(Text, ForeignKey("accounts.account_number"), index=True)
-    receiver_account = Column(Text, ForeignKey("accounts.account_number"), index=True)
-    transaction_type = Column(Text)  # Fritext
-    location_id = Column(Integer, ForeignKey("transaction_locations.id"), index=True)
-    notes = Column(Text)
+    currency = Column(String)
+    sender_account = Column(String, ForeignKey("accounts.account_number"))
+    receiver_account = Column(String)
+    transaction_type = Column(String)
+    location_id = Column(Integer, ForeignKey("transaction_locations.id"))
+    notes = Column(String)
