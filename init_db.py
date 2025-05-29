@@ -1,9 +1,12 @@
 import os
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
+from pathlib import Path
+os.chdir(Path(__file__).resolve().parent)
+load_dotenv()
 
 # Ladda miljövariabler
-load_dotenv(dotenv_path="/Users/thomasrosen/Documents/Dev/DATA24STO/Datakvalitet/Bank_Projekt/.env")
+load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Skapa engine
