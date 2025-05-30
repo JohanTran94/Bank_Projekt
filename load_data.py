@@ -61,7 +61,7 @@ def log_error_row(context: str, reason: str, row: dict, csv_file: str):
 
 
 # ------------- 🧱 batch_insert ----------------
-def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500):
+def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=100):
     for start in range(0, len(df), chunk_size):
         chunk = df.iloc[start:start + chunk_size]
         try:
@@ -124,7 +124,6 @@ def ensure_transaction_locations_exist(pdf: pd.DataFrame) -> pd.DataFrame:
     with engine.connect() as conn:
         existing = pd.read_sql("SELECT * FROM transaction_locations", conn)
 
-    # Fix: undvik FutureWarning
     frames = [df.dropna(how="all") for df in [existing, unique_locs]]
     combined = pd.concat(frames).drop_duplicates(location_cols, keep="first")
     combined = combined.reset_index(drop=True)
@@ -155,10 +154,9 @@ def load_transactions(csv_path: str):
             csv_file="invalid_transactions.csv"
         )
 
-    # 🚫 Försök konvertera belopp (amount) till float
+    # 🚫 Konvertera belopp (amount) till float
     df["amount"] = df["amount"].map_partitions(lambda s: pd.to_numeric(s, errors="coerce"))
     invalid_amounts = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").isna())]
-
     df = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").notna())]
 
     for _, row in invalid_amounts.compute().iterrows():
@@ -169,7 +167,7 @@ def load_transactions(csv_path: str):
             csv_file="invalid_amounts.csv"
         )
 
-    # 🚫 Försök konvertera datum
+    # 🚫 Konvertera datum
     df["timestamp"] = dd.to_datetime(df["timestamp"], errors="coerce")
     invalid_dates = df[df["timestamp"].isna()]
     df = df.dropna(subset=["timestamp"])
@@ -182,35 +180,57 @@ def load_transactions(csv_path: str):
             csv_file="invalid_timestamps.csv"
         )
 
-    # ✅ Gå vidare med giltiga rader
+    # ✅ Konvertera till pandas
     pdf = df.compute()
 
     # 🔗 Mappa location_id
     pdf = ensure_transaction_locations_exist(pdf)
 
-    # 🔍 Kolla avsändarkonton
+    # 🧠 Markera interna konton
+    pdf["is_internal_sender"] = pdf["sender_account"].str.startswith("SE")
+
+    # 🔍 Kolla befintliga konton
     with engine.connect() as conn:
         existing_accounts = pd.read_sql("SELECT account_number FROM accounts", conn)
-    known_senders = set(existing_accounts["account_number"])
+    known_accounts = set(existing_accounts["account_number"])
 
-    unknown_senders = pdf[~pdf["sender_account"].isin(known_senders)]
-    filtered = pdf[pdf["sender_account"].isin(known_senders)].copy()
+    unknown_senders = pdf[~pdf["sender_account"].isin(known_accounts)]
 
-    for _, row in unknown_senders.iterrows():
+    # 🚫 Interna konton utan match → loggas & utesluts
+    internal_missing = unknown_senders[unknown_senders["is_internal_sender"]]
+    for _, row in internal_missing.iterrows():
         log_error_row(
             context="load_transactions",
-            reason="Sender account not found in accounts table",
+            reason="Internal sender account missing in accounts table",
             row=row.to_dict(),
-            csv_file="unknown_sender_accounts.csv"
+            csv_file="internal_missing_accounts.csv"
         )
 
-    # 📦 Förbered för import
-    transactions_df = filtered[[
+    # ✅ Externa konton → skapas utan customer_id
+    external_missing = unknown_senders[~unknown_senders["is_internal_sender"]]
+    if not external_missing.empty:
+        new_external_accounts = pd.DataFrame({
+            "account_number": external_missing["sender_account"].unique(),
+            "customer_id": None
+        })
+        batch_insert(new_external_accounts, "accounts", engine)
+        known_accounts.update(new_external_accounts["account_number"])
+
+    # 🧹 Filtrera bort felaktiga interna
+    pdf = pdf[pdf["sender_account"].isin(known_accounts)].copy()
+
+    # 📦 Förbered transaktioner
+    transactions_df = pdf[[
         "transaction_id", "timestamp", "amount", "currency", "sender_account",
         "receiver_account", "transaction_type", "id", "notes"
     ]].rename(columns={"id": "location_id"}).drop_duplicates("transaction_id")
 
-    batch_insert(transactions_df, "transactions", engine)
+    # 🧼 Ta bort hjälpkolumn
+    transactions_df.drop(columns=["is_internal_sender"], errors="ignore", inplace=True)
+
+    batch_insert(transactions_df, "transactions", engine, chunk_size=100)
+
+
 
 
 # ------------- 🚀 main ----------------
