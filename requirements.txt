@@ -1,8 +1,18 @@
 python-dotenv~=1.1.0
+<<<<<<< HEAD
 
+=======
+psycopg2~=2.9.10
+>>>>>>> origin/master
 psycopg2-binary~=2.9.10
 SQLAlchemy~=2.0.41
 alembic~=1.16.1
 pandas~=2.1.4
 prefect~=3.4.4.dev1
+<<<<<<< HEAD
 great-expectations~=1.4.5
+=======
+dask~=2025.5.1
+great-expectations~=1.4.5
+pyarrow>=15.0.0
+>>>>>>> origin/master
