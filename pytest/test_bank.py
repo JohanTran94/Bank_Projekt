@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from bank import Bank
-from customer import Customer
 from account import Account
 
 
