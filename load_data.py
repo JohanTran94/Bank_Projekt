@@ -17,8 +17,6 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
-os.makedirs("_logs", exist_ok=True)
-
 Session = sessionmaker(bind=engine)
 session = Session()
 
@@ -46,8 +44,8 @@ def log_error_row(context: str, reason: str, row: dict, csv_file: str):
     session.commit()
 
     # Logga till CSV
-    os.makedirs("logs", exist_ok=True)
-    file_path = os.path.join("logs", csv_file)
+    os.makedirs("_logs", exist_ok=True)
+    file_path = os.path.join("_logs", csv_file)
 
     df = pd.DataFrame([{
         "context": context,
