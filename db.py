@@ -13,7 +13,7 @@ class Db:
     @staticmethod
     def _create_conn():
         return psycopg2.connect(
-            dbname='bank_db',
+            dbname='bank_projekt',
             user='postgres',
             password='Jason.Chen241194',
             host='localhost',

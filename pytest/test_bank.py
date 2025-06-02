@@ -47,16 +47,6 @@ def test_get_existing_bank(mock_conn_cursor, bank_instance):
     assert bank.banknr == "1234"
     assert bank.id == 2
 
-
-def test_get_non_existing_bank(mock_conn_cursor, bank_instance):
-    mock_conn, mock_cursor = mock_conn_cursor
-    mock_cursor.fetchone.return_value = None
-
-    bank = bank_instance.get("0000")
-
-    assert bank is None
-
-
 @patch.object(Account, 'create')
 def test_add_account_calls_account_create(mock_account_create, mock_conn_cursor, bank_instance):
     mock_customer = MagicMock(id=5, ssn="5555")

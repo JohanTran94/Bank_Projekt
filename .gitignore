@@ -1,9 +1,6 @@
-<<<<<<< HEAD
 db.py
 .env
-=======
 alembic.ini
->>>>>>> origin/master
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
