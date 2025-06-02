@@ -1,8 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, DateTime, Text, JSON
+from sqlalchemy import (
+    Column, Integer, String, Float, ForeignKey, UniqueConstraint,
+    DateTime, Text, JSON, Numeric, Index
+)
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
 Base = declarative_base()
+
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -11,7 +15,7 @@ class Customer(Base):
     name = Column(Text, nullable=False)
     address = Column(Text)
     phone = Column(Text)
-    ssn = Column(Text, unique=True, nullable=False)
+    ssn = Column(Text, unique=True, nullable=False, index=True)
 
     accounts = relationship("Account", back_populates="customer")
 
@@ -20,7 +24,7 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True)
-    account_number = Column(Text, unique=True, nullable=False)
+    account_number = Column(Text, unique=True, nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
 
     customer = relationship("Customer", back_populates="accounts")
@@ -37,7 +41,8 @@ class TransactionLocation(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "sender_country", "sender_municipality", "receiver_country", "receiver_municipality",
+            "sender_country", "sender_municipality",
+            "receiver_country", "receiver_municipality",
             name="uq_transaction_location"
         ),
     )
@@ -45,18 +50,24 @@ class TransactionLocation(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
+
     transaction_id = Column(String, primary_key=True)
-    timestamp = Column(DateTime)
-    amount = Column(Float)
-    currency = Column(String)
-    sender_account = Column(String, ForeignKey("accounts.account_number"))
-    receiver_account = Column(String)
-    transaction_type = Column(String)
-    location_id = Column(Integer, ForeignKey("transaction_locations.id"))
+    timestamp = Column(DateTime, index=True)
+    amount = Column(Numeric(12, 2))  # exakt för pengabelopp
+    currency = Column(String(10))
+
+    sender_account = Column(String, ForeignKey("accounts.account_number"), index=True)
+
+    # ❓ Optional: koppla även mottagarkonto om det kan vara internt
+    receiver_account = Column(String, ForeignKey("accounts.account_number"), index=True)
+
+    transaction_type = Column(String(50), index=True)
+    location_id = Column(Integer, ForeignKey("transaction_locations.id"), index=True)
     notes = Column(String)
 
+
 class ErrorRow(Base):
-    __tablename__ = 'error_rows'
+    __tablename__ = "error_rows"
 
     id = Column(Integer, primary_key=True)
     context = Column(Text, nullable=False)

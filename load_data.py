@@ -2,15 +2,13 @@ import os
 import dask.dataframe as dd
 import pandas as pd
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+import json
+from models import ErrorRow
 from dotenv import load_dotenv
 from pathlib import Path
-import psycopg2
-from psycopg2.extras import execute_values
-
-from models import ErrorRow
-from error_logger import log_error_row
 
 os.chdir(Path(__file__).resolve().parent)
 load_dotenv()
@@ -18,202 +16,227 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
+session = Session()
 
+def serialize_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_json(i) for i in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
 
-def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=100):
+def log_error_row(context: str, reason: str, row: dict, csv_file: str):
+    clean_row = serialize_for_json(row)
+    error = ErrorRow(
+        context=context,
+        error_reason=reason,
+        raw_data=clean_row,
+        logged_at=datetime.utcnow()
+    )
+    session.add(error)
+    session.commit()
+
+    os.makedirs("_logs", exist_ok=True)
+    file_path = os.path.join("_logs", csv_file)
+
+    df = pd.DataFrame([{
+        "context": context,
+        "error_reason": reason,
+        "raw_data": json.dumps(clean_row),
+        "logged_at": datetime.utcnow().isoformat()
+    }])
+
+    if os.path.exists(file_path):
+        df.to_csv(file_path, mode="a", header=False, index=False)
+    else:
+        df.to_csv(file_path, index=False)
+
+def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=100, session=None):
     if df.empty:
         return
 
-    conn = engine.raw_connection()
-    cursor = conn.cursor()
-
-    cols = list(df.columns)
-    values = df.values.tolist()
-
-    insert_stmt = f"INSERT INTO {table} ({', '.join(cols)}) VALUES %s"
-
-    for start in range(0, len(values), chunk_size):
-        chunk = values[start:start + chunk_size]
+    df = df.where(pd.notna(df), None)
+    for start in range(0, len(df), chunk_size):
+        chunk = df.iloc[start:start + chunk_size]
         try:
-            execute_values(cursor, insert_stmt, chunk)
-            conn.commit()
-        except psycopg2.errors.UniqueViolation as e:
-            conn.rollback()
-            print(f"⚠️  Skippar batch på grund av dubblettfel i tabell '{table}': {e}")
-        except Exception as e:
-            conn.rollback()
-            print(f"Fel vid batch_insert i tabell '{table}': {e}")
-
-    cursor.close()
-    conn.close()
-
+            chunk.to_sql(table, con=engine, if_exists="append", index=False, method="multi")
+        except IntegrityError as e:
+            print(f"\nFel vid batch_insert i tabell '{table}': {e}\n")
+            if session:
+                session.rollback()
 
 def load_customers_accounts(csv_path: str):
-    session = Session()
-    try:
-        df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
+    df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
 
-        df = df.rename(columns={
-            "Customer": "name",
-            "Address": "address",
-            "Phone": "phone",
-            "Personnummer": "ssn",
-            "BankAccount": "account_number"
-        })
+    df = df.rename(columns={
+        "Customer": "name",
+        "Address": "address",
+        "Phone": "phone",
+        "Personnummer": "ssn",
+        "BankAccount": "account_number"
+    })
 
-        required_fields = ["name", "ssn", "account_number"]
-        invalid_rows = df[df[required_fields].isnull().any(axis=1)]
-        valid_rows = df.dropna(subset=required_fields)
+    required_fields = ["name", "ssn", "account_number"]
+    invalid_rows = df[df[required_fields].isnull().any(axis=1)]
+    valid_rows = df.dropna(subset=required_fields)
 
-        for _, row in invalid_rows.compute().iterrows():
-            log_error_row(
-                session,
-                context="load_customers_accounts",
-                reason="Missing required fields: name, ssn, or account_number",
-                row=row.to_dict(),
-                csv_file="invalid_customers.csv"
-            )
+    for _, row in invalid_rows.compute().iterrows():
+        log_error_row("load_customers_accounts", "Missing required fields", row.to_dict(), "invalid_customers.csv")
 
-        pdf = valid_rows.compute()
+    pdf = valid_rows.compute()
 
-        unique_customers = pdf.drop_duplicates(subset="ssn").copy()
-        batch_insert(unique_customers[["name", "address", "phone", "ssn"]], "customers", engine)
+    unique_customers = pdf.drop_duplicates(subset="ssn").copy()
+    batch_insert(unique_customers[["name", "address", "phone", "ssn"]], "customers", engine, session=session)
 
-        with engine.connect() as conn:
-            customer_map = pd.read_sql("SELECT id, ssn FROM customers", conn)
+    with engine.connect() as conn:
+        customer_map = pd.read_sql("SELECT id, ssn FROM customers", conn)
 
-        merged = pdf.merge(customer_map, on="ssn", how="left")
-        accounts_df = merged[["account_number", "id"]].drop_duplicates("account_number")
-        accounts_df = accounts_df.rename(columns={"id": "customer_id"})
+    merged = pdf.merge(customer_map, on="ssn", how="left")
+    accounts_df = merged[["account_number", "id"]].drop_duplicates("account_number")
+    accounts_df = accounts_df.rename(columns={"id": "customer_id"})
 
-        batch_insert(accounts_df, "accounts", engine)
+    batch_insert(accounts_df, "accounts", engine, session=session)
 
-    except Exception as e:
-        print(f"Fel i load_customers_accounts: {e}")
-    finally:
-        session.close()
-
-
-def ensure_transaction_locations_exist(pdf: pd.DataFrame) -> pd.DataFrame:
-    location_cols = [
-        "sender_country", "sender_municipality", "receiver_country", "receiver_municipality"
-    ]
+def ensure_transaction_locations_exist(pdf: pd.DataFrame, session=None) -> pd.DataFrame:
+    location_cols = ["sender_country", "sender_municipality", "receiver_country", "receiver_municipality"]
     unique_locs = pdf[location_cols].drop_duplicates().copy()
+    unique_locs = unique_locs.where(pd.notna(unique_locs), None)
 
     with engine.connect() as conn:
         existing = pd.read_sql("SELECT * FROM transaction_locations", conn)
 
-    frames = [existing, unique_locs]
-    combined = pd.concat(frames).drop_duplicates(subset=location_cols, keep="first").reset_index(drop=True)
-
-    # Nytt id-start = max befintliga id + 1 eller 1 om tomt
-    max_id = existing["id"].max() if not existing.empty else 0
-    combined = combined.reset_index(drop=True)
-    combined["id"] = combined.index + 1 + max_id
+    frames = [df.dropna(how="all") for df in [existing, unique_locs]]
+    combined = pd.concat(frames).drop_duplicates(location_cols, keep="first").reset_index(drop=True)
+    combined["id"] = combined.index + 1
 
     new_locs = combined[~combined["id"].isin(existing["id"])]
     if not new_locs.empty:
-        batch_insert(new_locs, "transaction_locations", engine)
+        batch_insert(new_locs, "transaction_locations", engine, session=session)
 
     merged = pdf.merge(combined, on=location_cols, how="left")
     return merged
 
-
 def load_transactions(csv_path: str):
-    session = Session()
-    try:
-        df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
+    df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
 
-        required_fields = ["transaction_id", "sender_account", "receiver_account"]
-        missing_fields = df[df[required_fields].isnull().any(axis=1)]
-        df = df.dropna(subset=required_fields)
+    # 🚫 Hitta rader med saknade obligatoriska fält
+    required_fields = ["transaction_id", "sender_account", "receiver_account"]
+    missing_fields = df[df[required_fields].isnull().any(axis=1)]
+    df = df.dropna(subset=required_fields)
 
-        for _, row in missing_fields.compute().iterrows():
-            log_error_row(
-                session,
-                context="load_transactions",
-                reason="Missing required transaction fields",
-                row=row.to_dict(),
-                csv_file="invalid_transactions.csv"
-            )
+    for _, row in missing_fields.compute().iterrows():
+        log_error_row(
+            context="load_transactions",
+            reason="Missing required transaction fields",
+            row=row.to_dict(),
+            csv_file="invalid_transactions.csv"
+        )
 
-        df["amount"] = df["amount"].map_partitions(lambda s: pd.to_numeric(s, errors="coerce"))
-        invalid_amounts = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").isna())]
-        df = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").notna())]
+    # 🚫 Konvertera belopp (amount) till float
+    df["amount"] = df["amount"].map_partitions(lambda s: pd.to_numeric(s, errors="coerce"))
+    invalid_amounts = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").isna())]
+    df = df[df["amount"].map_partitions(lambda x: pd.to_numeric(x, errors="coerce").notna())]
 
-        for _, row in invalid_amounts.compute().iterrows():
-            log_error_row(
-                session,
-                context="load_transactions",
-                reason="Invalid amount (not a number)",
-                row=row.to_dict(),
-                csv_file="invalid_amounts.csv"
-            )
+    for _, row in invalid_amounts.compute().iterrows():
+        log_error_row(
+            context="load_transactions",
+            reason="Invalid amount (not a number)",
+            row=row.to_dict(),
+            csv_file="invalid_amounts.csv"
+        )
 
-        df["timestamp"] = dd.to_datetime(df["timestamp"], errors="coerce")
-        invalid_dates = df[df["timestamp"].isna()]
-        df = df.dropna(subset=["timestamp"])
+    # 🚫 Konvertera datum
+    df["timestamp"] = dd.to_datetime(df["timestamp"], errors="coerce")
+    invalid_dates = df[df["timestamp"].isna()]
+    df = df.dropna(subset=["timestamp"])
 
-        for _, row in invalid_dates.compute().iterrows():
-            log_error_row(
-                session,
-                context="load_transactions",
-                reason="Invalid timestamp (could not parse date)",
-                row=row.to_dict(),
-                csv_file="invalid_timestamps.csv"
-            )
+    for _, row in invalid_dates.compute().iterrows():
+        log_error_row(
+            context="load_transactions",
+            reason="Invalid timestamp (could not parse date)",
+            row=row.to_dict(),
+            csv_file="invalid_timestamps.csv"
+        )
 
-        pdf = df.compute()
+    # ✅ Konvertera till pandas
+    pdf = df.compute()
 
-        # Uppdatera locations med ids
-        pdf = ensure_transaction_locations_exist(pdf)
+    # 🔗 Mappa location_id
+    pdf = ensure_transaction_locations_exist(pdf)
 
-        # Markera interna konton (exempelvis börjar med 'SE')
-        pdf["is_internal_sender"] = pdf["sender_account"].str.startswith("SE")
+    # 🧠 Markera interna konton
+    pdf["is_internal_sender"] = pdf["sender_account"].str.startswith("SE")
 
-        with engine.connect() as conn:
-            existing_accounts = pd.read_sql("SELECT account_number FROM accounts", conn)
-        known_accounts = set(existing_accounts["account_number"])
+    # 🔍 Kolla befintliga konton
+    with engine.connect() as conn:
+        existing_accounts = pd.read_sql("SELECT account_number FROM accounts", conn)
+    known_accounts = set(existing_accounts["account_number"])
 
-        unknown_senders = pdf[~pdf["sender_account"].isin(known_accounts)]
+    # ——————— Hantera sender_account ———————
+    unknown_senders = pdf[~pdf["sender_account"].isin(known_accounts)]
 
-        # Logga och filtrera interna konton utan match
-        internal_missing = unknown_senders[unknown_senders["is_internal_sender"]]
-        for _, row in internal_missing.iterrows():
-            log_error_row(
-                session,
-                context="load_transactions",
-                reason="Internal sender account missing in accounts table",
-                row=row.to_dict(),
-                csv_file="internal_missing_accounts.csv"
-            )
+    # 🚫 Interna konton utan match → loggas & utesluts
+    internal_missing = unknown_senders[unknown_senders["is_internal_sender"]]
+    for _, row in internal_missing.iterrows():
+        log_error_row(
+            context="load_transactions",
+            reason="Internal sender account missing in accounts table",
+            row=row.to_dict(),
+            csv_file="internal_missing_accounts.csv"
+        )
 
-        # Skapa nya externa konton utan customer_id
-        external_missing = unknown_senders[~unknown_senders["is_internal_sender"]]
-        if not external_missing.empty:
-            new_external_accounts = pd.DataFrame({
-                "account_number": external_missing["sender_account"].unique(),
-                "customer_id": None
-            })
-            batch_insert(new_external_accounts, "accounts", engine)
-            known_accounts.update(new_external_accounts["account_number"])
+    # ✅ Externa konton → skapas utan customer_id
+    external_missing = unknown_senders[~unknown_senders["is_internal_sender"]]
+    if not external_missing.empty:
+        new_external_accounts = pd.DataFrame({
+            "account_number": external_missing["sender_account"].unique(),
+            "customer_id": None
+        })
+        batch_insert(new_external_accounts, "accounts", engine)
+        known_accounts.update(new_external_accounts["account_number"])
 
-        # Filtrera bort felaktiga interna
-        pdf = pdf[pdf["sender_account"].isin(known_accounts)].copy()
+    # 🧹 Filtrera bort felaktiga interna avsändare
+    pdf = pdf[pdf["sender_account"].isin(known_accounts)].copy()
 
-        transactions_df = pdf[[
-            "transaction_id", "timestamp", "amount", "currency", "sender_account",
-            "receiver_account", "transaction_type", "id", "notes"
-        ]].rename(columns={"id": "location_id"}).drop_duplicates("transaction_id")
+    # ——————— Hantera receiver_account ———————
+    unknown_receivers = pdf[~pdf["receiver_account"].isin(known_accounts)]
 
-        transactions_df.drop(columns=["is_internal_sender"], errors="ignore", inplace=True)
+    # 🚫 Interna mottagare utan konto → loggas
+    internal_receivers = unknown_receivers[unknown_receivers["receiver_account"].str.startswith("SE")]
+    for _, row in internal_receivers.iterrows():
+        log_error_row(
+            context="load_transactions",
+            reason="Internal receiver account missing in accounts table",
+            row=row.to_dict(),
+            csv_file="internal_missing_receivers.csv"
+        )
 
-        batch_insert(transactions_df, "transactions", engine, chunk_size=100)
+    # ✅ Externa mottagare → skapas med customer_id=None
+    external_receivers = unknown_receivers[~unknown_receivers["receiver_account"].str.startswith("SE")]
+    if not external_receivers.empty:
+        new_external_receiver_accounts = pd.DataFrame({
+            "account_number": external_receivers["receiver_account"].unique(),
+            "customer_id": None
+        })
+        batch_insert(new_external_receiver_accounts, "accounts", engine)
+        known_accounts.update(new_external_receiver_accounts["account_number"])
 
-    except Exception as e:
-        print(f"Fel i load_transactions: {e}")
-    finally:
-        session.close()
+    # 🧹 Filtrera bort interna mottagare som inte finns
+    pdf = pdf[pdf["receiver_account"].isin(known_accounts)].copy()
+
+    # 📦 Förbered transaktioner
+    transactions_df = pdf[[
+        "transaction_id", "timestamp", "amount", "currency", "sender_account",
+        "receiver_account", "transaction_type", "id", "notes"
+    ]].rename(columns={"id": "location_id"}).drop_duplicates("transaction_id")
+
+    # 🧼 Ta bort hjälpkolumn
+    transactions_df.drop(columns=["is_internal_sender"], errors="ignore", inplace=True)
+
+    batch_insert(transactions_df, "transactions", engine, chunk_size=100)
 
 
 if __name__ == "__main__":
