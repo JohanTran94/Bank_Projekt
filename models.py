@@ -21,7 +21,7 @@ class Account(Base):
 
     id = Column(Integer, primary_key=True)
     account_number = Column(Text, unique=True, nullable=False)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
 
     customer = relationship("Customer", back_populates="accounts")
 
