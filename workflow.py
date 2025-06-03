@@ -58,7 +58,10 @@ def populate_normalized_database(
     load_customers(customer_csv)
     load_transactions_task(transaction_csv)
 
-    logger.info("✅ Prefect-flow färdigt")
+    logger.info("Prefect-flow färdigt")
+
+
+
 
 if __name__ == "__main__":
     populate_normalized_database()
