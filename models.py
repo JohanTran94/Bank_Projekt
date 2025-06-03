@@ -4,6 +4,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
 
 Base = declarative_base()
 
@@ -17,6 +19,8 @@ class Customer(Base):
     phone = Column(Text)
     ssn = Column(Text, unique=True, nullable=False, index=True)
 
+    migration_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+
     accounts = relationship("Account", back_populates="customer")
 
 
@@ -26,6 +30,8 @@ class Account(Base):
     id = Column(Integer, primary_key=True)
     account_number = Column(Text, unique=True, nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
+
+    migration_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
 
     customer = relationship("Customer", back_populates="accounts")
 
@@ -47,6 +53,7 @@ class TransactionLocation(Base):
         ),
     )
 
+    migration_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -65,6 +72,8 @@ class Transaction(Base):
     location_id = Column(Integer, ForeignKey("transaction_locations.id"), index=True)
     notes = Column(String)
 
+    migration_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+
 
 class ErrorRow(Base):
     __tablename__ = "error_rows"
@@ -77,3 +86,11 @@ class ErrorRow(Base):
 
     def __repr__(self):
         return f"<ErrorRow(context='{self.context}', reason='{self.error_reason}')>"
+
+
+class MigrationRun(Base):
+    __tablename__ = "migration_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
