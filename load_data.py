@@ -220,7 +220,7 @@ def load_transactions(csv_path: str):
     for _, row in invalid_dates.compute().iterrows():
         log_error_row("load_transactions", "Invalid timestamp (could not parse date)", row.to_dict(), "invalid_timestamps.csv")
 
-    valid_currencies = {"SEK", "USD", "EUR", "GBP", "CNY"}
+    valid_currencies = {"SEK", "NOK", "DKK", "JPY", "USD", "EUR", "GBP", "CNY"}
     invalid_currency = df[~df["currency"].isin(valid_currencies)]
     df = df[df["currency"].isin(valid_currencies)]
 
