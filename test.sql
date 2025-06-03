@@ -2,12 +2,15 @@ BEGIN;
 
 
 INSERT INTO customers (name, address, phone, ssn)
-VALUES ('Maxmaxmax', 'Testvägen 2', '+46123456789', '2323-1234');
+VALUES ('MaxMAX', 'Testvägen 5', '+46123456789', '2333-1234');
 
-INSERT INTO accounts (account_number, customer_id)
-VALUES ('SE8902001234567890433456', (SELECT id FROM customers WHERE ssn = '1234-2222'));
-
-COMMIT;
 
 ROLLBACK;
 
+
+BEGIN;
+
+INSERT INTO customers (name, address, phone, ssn)
+VALUES ('MaxMAX', 'Testvägen 5', '+46123456789', '2345-3656');
+COMMIT;
+ROLLBACK;
