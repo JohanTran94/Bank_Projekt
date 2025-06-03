@@ -37,3 +37,21 @@ create table transactions
     account_nr text not null,
     time TIMESTAMP DEFAULT now()
 );
+BEGIN;
+
+-- Sätt in en ny kund
+INSERT INTO customers (name, address, phone, ssn)
+VALUES ('Test Testsson', 'Testvägen 1', '+46123456789', '19900101-1234');
+
+-- Sätt in tillhörande konto
+INSERT INTO accounts (account_number, customer_id)
+VALUES ('SE8902001234567890123456', (SELECT id FROM customers WHERE ssn = '19900101-1234'));
+
+-- Medvetet fel: lägg till en transaktion med ogiltig kolumn (för att trigga rollback)
+INSERT INTO transactions (transaction_id, timestamp, amount, currency, sender_account, receiver_account, transaction_type, location_id, notes, invalid_column)
+VALUES ('TX123', now(), 100.00, 'SEK', 'SE8902001234567890123456', 'SE8902001234567890123456', 'Transfer', NULL, 'Test', 'fail');
+
+-- Om vi kommit hit, commit
+COMMIT;
+
+-- Annars fångas felet nedan
