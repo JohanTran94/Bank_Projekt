@@ -1,0 +1,6 @@
+context,error_reason,raw_data,logged_at
+load_customers_accounts,"Missing required fields: name, ssn, account_number","{""name"": null, ""address"": null, ""phone"": null, ""ssn"": null, ""account_number"": null}",2025-06-02T10:06:32.214346
+load_customers_accounts,"Missing required fields: name, ssn, account_number","{""name"": null, ""address"": null, ""phone"": null, ""ssn"": null, ""account_number"": null}",2025-06-02T10:07:24.989431
+load_customers_accounts,Missing required fields,"{""name"": ""Test Testsson"", ""address"": ""Storgatan 1"", ""phone"": ""070-123 45 67"", ""ssn"": null, ""account_number"": ""SE1234567890123456789012""}",2025-06-03T11:25:03.407513
+load_customers_accounts,Missing required fields,"{""name"": ""Test Testsson"", ""address"": ""Storgatan 1"", ""phone"": ""070-123 45 67"", ""ssn"": null, ""account_number"": ""SE1234567890123456789012""}",2025-06-03T11:39:26.428885
+load_customers_accounts,Missing required fields,"{""name"": ""Test Testsson"", ""address"": ""Storgatan 1"", ""phone"": ""070-123 45 67"", ""ssn"": null, ""account_number"": ""SE1234567890123456789012""}",2025-06-03T11:40:38.956058

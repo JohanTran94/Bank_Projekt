@@ -1,0 +1,2 @@
+context,error_reason,raw_data,logged_at
+load_transactions,"Missing required transaction fields: transaction_id, sender_account, receiver_account","{""transaction_id"": null, ""timestamp"": null, ""amount"": null, ""currency"": null, ""sender_account"": null, ""receiver_account"": null, ""sender_country"": null, ""sender_municipality"": null, ""receiver_country"": null, ""receiver_municipality"": null, ""transaction_type"": null, ""notes"": null}",2025-06-02T10:07:25.283034

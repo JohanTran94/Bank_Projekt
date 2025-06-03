@@ -28,15 +28,16 @@ class Bank:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM banks WHERE banknr = %s", [banknr])
         bank = cursor.fetchone()
-        if(bank[0]):
-            print(f"Bank loaded.")
-            self.id = bank[0]
-            self.name = bank[1]
-            self.banknr = bank[2]
-            return self
-        else:
+
+        if bank is None:
             print(f"[Warning] Bank with banknr {banknr} not found.")
             return None
+
+        print(f"Bank loaded.")
+        self.id = bank[0]
+        self.name = bank[1]
+        self.banknr = bank[2]
+        return self
 
     def add_customer(self, customer):
         self.customers.append(customer)
