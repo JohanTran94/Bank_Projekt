@@ -1,5 +1,5 @@
-alembic.ini
-_logs/
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -131,7 +131,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+
 .venv
 env/
 venv/
