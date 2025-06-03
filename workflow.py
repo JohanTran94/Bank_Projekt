@@ -1,32 +1,69 @@
-from prefect import flow, task
-import pandas as pd
+from prefect import flow, task, get_run_logger
+from load_data import load_customers_accounts, load_transactions
+from models import Base
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 import os
+from dotenv import load_dotenv
+from pathlib import Path
 
+# Initiera .env och databasanslutning
+os.chdir(Path(__file__).resolve().parent)
 load_dotenv()
-db_url = os.getenv("DB_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+
 
 @task
-def import_csv(csv_path):
-    dataframe = pd.read_csv(csv_path)
-    return dataframe
+def create_tables():
+    logger = get_run_logger()
+    try:
+        logger.info(" Skapar tabeller...")
+        Base.metadata.create_all(engine)
+        logger.info(" Tabeller skapade")
+    except SQLAlchemyError as e:
+        logger.error(f" Fel vid skapande av tabeller: {e}")
+        raise
+
 
 @task
-def write_to_postgres(dataframe, table_name):
-    engine = create_engine(db_url)
-    dataframe.to_sql(table_name, engine, if_exists='append', index=False, method='multi')
+def load_customers(csv_path: str):
+    logger = get_run_logger()
+    try:
+        logger.info(f" Läser in kunder från {csv_path}")
+        load_customers_accounts(csv_path)
+        logger.info(" Kunder & konton inlästa")
+    except Exception as e:
+        logger.error(f" Fel vid kundinläsning: {e}")
+        raise
 
-@flow
-def load_multiple_csv():
-    csv_table_list = [
-        ("data/transactions.csv", "transactions"),
-        ("data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
-    ]
 
-    for csv_path, table_name in csv_table_list:
-        df = import_csv(csv_path)
-        write_to_postgres(df, table_name)
+@task
+def load_transactions_task(csv_path: str):
+    logger = get_run_logger()
+    try:
+        logger.info(f" Läser in transaktioner från {csv_path}")
+        load_transactions(csv_path)
+        logger.info(" Transaktioner inlästa")
+    except Exception as e:
+        logger.error(f" Fel vid transaktionsinläsning: {e}")
+        raise
+
+
+@flow(name="Populate Bank Database")
+def populate_normalized_database(
+        customer_csv: str = "data/sebank_customers_with_accounts.csv",
+        transaction_csv: str = "data/transactions.csv"
+):
+    logger = get_run_logger()
+    logger.info(" Startar Prefect-flow för datainläsning")
+
+    create_tables()
+    load_customers(customer_csv)
+    load_transactions_task(transaction_csv)
+
+    logger.info("Prefect-flow färdigt")
+
 
 if __name__ == "__main__":
-    load_multiple_csv()
+    populate_normalized_database()
