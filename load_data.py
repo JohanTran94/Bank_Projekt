@@ -54,12 +54,25 @@ def create_alembic_revision_if_data_exists(alembic_cfg, description: str, run_id
         return
 
     # Skapa revision
-    message = f"Data load: {description} [{short_run_id}]"
+    message = f"ETL {short_run_id}"
     command.revision(alembic_cfg, message=message, autogenerate=False)
 
     revision_path = sorted(version_dir.glob("*.py"), key=os.path.getmtime)[-1]
 
     run_id_str = str(run_id)
+
+    # Lägg till run_id i docstring (efter första """-block)
+    with open(revision_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    for i, line in enumerate(lines):
+        if '"""' in line:
+            lines.insert(i + 1, f"Run ID: {run_id_str}\n")
+            break
+
+    with open(revision_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
     content = f"""
 
 def upgrade():
@@ -78,7 +91,6 @@ def downgrade():
 
     command.upgrade(alembic_cfg, "head")
     print("✅ Alembic-revision skapad och uppgraderad till head.")
-
 
 
 os.chdir(Path(__file__).resolve().parent)
