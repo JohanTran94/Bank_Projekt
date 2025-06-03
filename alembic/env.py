@@ -1,5 +1,11 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Ladda .env från projektroten
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+
 from models import Base
 
 from logging.config import fileConfig
@@ -61,11 +67,14 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    from sqlalchemy import create_engine
+
+    # Hämta URL från .env
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("❌ DATABASE_URL saknas i .env!")
+
+    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

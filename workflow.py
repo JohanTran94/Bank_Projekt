@@ -1,32 +1,33 @@
 from prefect import flow, task
-import pandas as pd
+from load_data import load_customers_accounts, load_transactions
+from models import Base
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+from pathlib import Path
 
+# Ladda miljövariabler från .env
+os.chdir(Path(__file__).resolve().parent)
 load_dotenv()
-db_url = os.getenv("DB_URL")
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
 
 @task
-def import_csv(csv_path):
-    dataframe = pd.read_csv(csv_path)
-    return dataframe
+def load_all_data():
+    print("Kör kund- och kontoinläsning...")
+    load_customers_accounts("data/sebank_customers_with_accounts.csv")
 
-@task
-def write_to_postgres(dataframe, table_name):
-    engine = create_engine(db_url)
-    dataframe.to_sql(table_name, engine, if_exists='append', index=False, method='multi')
+    print("Kör transaktionsinläsning...")
+    load_transactions("data/transactions.csv")
 
 @flow
-def load_multiple_csv():
-    csv_table_list = [
-        ("data/transactions.csv", "transactions"),
-        ("data/sebank_customers_with_accounts.csv", "sebank_customers_with_accounts")
-    ]
-
-    for csv_path, table_name in csv_table_list:
-        df = import_csv(csv_path)
-        write_to_postgres(df, table_name)
+def populate_normalized_database():
+    print("🔁 Prefect-flow startar")
+    load_all_data()
+    print("✅ Prefect-flow klart")
 
 if __name__ == "__main__":
-    load_multiple_csv()
+    print(f"🔧 Skapar tabeller mot DB: {DATABASE_URL}")
+    Base.metadata.create_all(engine)
+    populate_normalized_database()
