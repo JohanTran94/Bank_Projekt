@@ -1,4 +1,7 @@
+.env
+db.py
 alembic.ini
+_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
