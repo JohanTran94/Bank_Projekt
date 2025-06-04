@@ -122,4 +122,3 @@ MIT License
 - Jonas Larsson  
 
 With great help from Benjamin Berglund
-# Bank
