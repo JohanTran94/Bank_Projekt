@@ -21,7 +21,7 @@ def serialize_for_json(obj):
 def log_error_row(session: Session, context: str, reason: str, row: dict, csv_file: str):
     clean_row = serialize_for_json(row)
 
-    # Logga till databas
+    # Log to database
     error = ErrorRow(
         context=context,
         error_reason=reason,
@@ -31,11 +31,12 @@ def log_error_row(session: Session, context: str, reason: str, row: dict, csv_fi
     try:
         session.add(error)
         session.commit()
+        print("🟡 Error logged to database")
     except Exception as e:
         session.rollback()
-        print(f"Fel vid loggning till databas: {e}")
+        print(f"🔴 Failed to log error to database: {e}")
 
-    # Logga till CSV
+    # Log to CSV file
     file_path = os.path.join(LOG_DIR, csv_file)
 
     df = pd.DataFrame([{
@@ -50,5 +51,7 @@ def log_error_row(session: Session, context: str, reason: str, row: dict, csv_fi
             df.to_csv(file_path, mode="a", header=False, index=False)
         else:
             df.to_csv(file_path, index=False)
+        print("🟡 Error logged to CSV")
     except Exception as e:
-        print(f"Fel vid loggning till CSV: {e}")
+        print(f"🔴 Failed to log error to CSV: {e}")
+

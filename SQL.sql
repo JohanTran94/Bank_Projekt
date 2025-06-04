@@ -1,10 +1,14 @@
 BEGIN;
 
 INSERT INTO customers (name, address, phone, ssn)
-VALUES ('Alice', '123 Main St', '0701234567', '9001011289');
+VALUES ('Anna', 'Address 1', '0701234567', '9001011268');
 
-COMMIT;
+INSERT INTO customers (name, address, phone, ssn)
+VALUES ('Bosse', 'Address 2', '0707654321', '9001011268');
 
-BEGIN;
-DELETE FROM customers WHERE ssn = '9001011289';
+INSERT INTO customers (name, address, phone, ssn)
+VALUES ('Charlie', 'Address 3', '0705555555', '9010101010');
+
+ROLLBACK;
+
 COMMIT;

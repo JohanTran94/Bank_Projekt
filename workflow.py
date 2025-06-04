@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Initiera .env och databasanslutning
+# Initialize .env and database connection
 os.chdir(Path(__file__).resolve().parent)
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -18,11 +18,11 @@ engine = create_engine(DATABASE_URL)
 def create_tables():
     logger = get_run_logger()
     try:
-        logger.info(" Skapar tabeller...")
+        logger.info("Creating tables...")
         Base.metadata.create_all(engine)
-        logger.info(" Tabeller skapade")
+        logger.info("🟢 Tables created successfully")
     except SQLAlchemyError as e:
-        logger.error(f" Fel vid skapande av tabeller: {e}")
+        logger.error(f"🔴 Error while creating tables: {e}")
         raise
 
 
@@ -30,11 +30,11 @@ def create_tables():
 def load_customers(csv_path: str):
     logger = get_run_logger()
     try:
-        logger.info(f" Läser in kunder från {csv_path}")
+        logger.info(f"Reading customers from {csv_path}")
         load_customers_accounts(csv_path)
-        logger.info(" Kunder & konton inlästa")
+        logger.info("🟢 Customers & accounts loaded successfully")
     except Exception as e:
-        logger.error(f" Fel vid kundinläsning: {e}")
+        logger.error(f"🔴 Error while loading customers: {e}")
         raise
 
 
@@ -42,11 +42,11 @@ def load_customers(csv_path: str):
 def load_transactions_task(csv_path: str):
     logger = get_run_logger()
     try:
-        logger.info(f" Läser in transaktioner från {csv_path}")
+        logger.info(f"Reading transactions from {csv_path}")
         load_transactions(csv_path)
-        logger.info(" Transaktioner inlästa")
+        logger.info("🟢 Transactions loaded successfully")
     except Exception as e:
-        logger.error(f" Fel vid transaktionsinläsning: {e}")
+        logger.error(f"🔴 Error while loading transactions: {e}")
         raise
 
 
@@ -56,13 +56,13 @@ def populate_normalized_database(
         transaction_csv: str = "data/transactions.csv"
 ):
     logger = get_run_logger()
-    logger.info(" Startar Prefect-flow för datainläsning")
+    logger.info("Starting Prefect flow for data import")
 
     create_tables()
     load_customers(customer_csv)
     load_transactions_task(transaction_csv)
 
-    logger.info("Prefect-flow färdigt")
+    logger.info("🟢 Prefect flow completed successfully")
 
 
 if __name__ == "__main__":
