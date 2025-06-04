@@ -13,6 +13,7 @@ import uuid
 from alembic.config import Config
 from alembic import command
 from collections import defaultdict
+from tqdm import tqdm
 
 MIGRATION_RUN_ID = uuid.uuid4()
 error_counts = defaultdict(int)
@@ -141,7 +142,9 @@ def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500, session=N
         return
 
     df = df.where(pd.notna(df), None)
-    for start in range(0, len(df), chunk_size):
+    total_batches = (len(df) + chunk_size - 1) // chunk_size
+
+    for start in tqdm(range(0, len(df), chunk_size), desc=f"Inserting into {table}", unit="batch"):
         chunk = df.iloc[start:start + chunk_size]
         try:
             chunk.to_sql(table, con=engine, if_exists="append", index=False, method="multi")
