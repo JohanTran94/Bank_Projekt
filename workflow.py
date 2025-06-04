@@ -14,6 +14,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
 
+
 @task
 def create_tables():
     logger = get_run_logger()
