@@ -5,6 +5,7 @@ import uuid
 import json
 import csv
 import os
+import re
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
@@ -17,6 +18,71 @@ import pandas as pd
 from tqdm import tqdm
 
 from models import ErrorRow, MigrationRun
+
+
+def preprocess_ssn(ssn: str) -> str:
+    if not isinstance(ssn, str):
+        return ""
+    ssn = ssn.strip()
+
+
+    if re.match(r'^\d{10}$', ssn):
+        return ssn[:6] + "-" + ssn[6:]
+    elif re.match(r'^\d{12}$', ssn):
+        return ssn[:8] + "-" + ssn[8:]
+    return ssn
+
+
+def is_valid_ssn(ssn: str) -> bool:
+    if not isinstance(ssn, str):
+        return False
+    ssn = preprocess_ssn(ssn)
+    if not ssn:
+        return False
+    return bool(re.match(r'^(\d{6}|\d{8})[-+]\d{4}$', ssn))
+
+
+
+def preprocess_phone(phone: str) -> str:
+    if not isinstance(phone, str):
+        return ""
+    phone = phone.strip()
+
+    # Remove all spaces, parentheses, dashes
+    phone = re.sub(r'[ \-\(\)]', '', phone)
+
+    # Remove leading zero if after country code e.g. '+460396...' → '+46396...'
+    phone = re.sub(r'^\+460', '+46', phone)
+
+    # If phone starts with '0' (local format), replace leading '0' with '+46'
+    if phone.startswith('0'):
+        phone = '+46' + phone[1:]
+
+    # If phone does not start with +46, add it (assume local)
+    if not phone.startswith('+46'):
+        # Remove leading zeros first
+        phone = phone.lstrip('0')
+        phone = '+46' + phone
+
+    return phone
+
+def is_valid_phone(phone: str) -> bool:
+    if not isinstance(phone, str):
+        return False
+    return re.match(r'^\+46\d{7,10}$', phone) is not None
+
+
+def preprocess_iban(iban: str) -> str:
+    if not isinstance(iban, str):
+        return ""
+    iban = iban.strip().replace(' ', '').upper()
+    return iban
+
+def is_valid_iban(iban: str) -> bool:
+    if not isinstance(iban, str):
+        return False
+    return re.match(r'^SE\d{2}[A-Z0-9]{16,20}$', iban) is not None
+
 
 def detect_csv_type(csv_path: Path) -> str:
     """
@@ -205,24 +271,59 @@ def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500, session=N
 def load_customers_accounts(csv_path: str):
     df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
 
+    df.columns = df.columns.str.strip().str.lower()
     df = df.rename(columns={
-        "Customer": "name",
-        "Address": "address",
-        "Phone": "phone",
-        "Personnummer": "ssn",
-        "BankAccount": "account_number"
+        "customer": "name",
+        "address": "address",
+        "phone": "phone",
+        "personnummer": "ssn",
+        "bankaccount": "account_number"
     })
 
     required_fields = ["name", "ssn", "account_number"]
     invalid_rows = df[df[required_fields].isnull().any(axis=1)]
     valid_rows = df.dropna(subset=required_fields)
 
+    pdf = valid_rows.compute()
+
     for _, row in invalid_rows.compute().iterrows():
         log_error_row("load_customers_accounts", "Missing required fields", row.to_dict(), "invalid_customers.csv")
 
-    pdf = valid_rows.compute()
+    # Validate and preprocess SSN
+    pdf["ssn"] = pdf["ssn"].apply(preprocess_ssn)
+    invalid_ssn = pdf[~pdf["ssn"].apply(is_valid_ssn)]
+    for _, row in invalid_ssn.iterrows():
+        log_error_row("load_customers_accounts", "Invalid SSN format", row.to_dict(), "invalid_ssn.csv")
+    pdf = pdf[pdf["ssn"].apply(is_valid_ssn)]
 
+    # Validate and preprocess phone numbers
+    pdf["phone"] = pdf["phone"].apply(preprocess_phone)
+    invalid_phone = pdf[~pdf["phone"].apply(is_valid_phone)]
+    for _, row in invalid_phone.iterrows():
+        log_error_row("load_customers_accounts", "Invalid phone number format", row.to_dict(), "invalid_phone.csv")
+    pdf = pdf[pdf["phone"].apply(is_valid_phone)]
+
+    # Check that 'account_number' column exists before IBAN processing
+    if "account_number" not in pdf.columns:
+        raise KeyError("account_number column missing before IBAN preprocessing")
+
+    # Preprocess IBAN once
+    pdf["account_number"] = pdf["account_number"].apply(preprocess_iban)
+
+    # Validate IBAN
+    invalid_iban = pdf[~pdf["account_number"].apply(is_valid_iban)]
+    for _, row in invalid_iban.iterrows():
+        log_error_row("load_customers_accounts", "Invalid IBAN format", row.to_dict(), "invalid_iban.csv")
+    pdf = pdf[pdf["account_number"].apply(is_valid_iban)]
+
+    # De-duplicate and insert customers
     unique_customers = pdf.drop_duplicates(subset="ssn").copy()
+
+    # Failsafe check
+    missing_cols = [col for col in ["name", "address", "phone", "ssn"] if col not in unique_customers.columns]
+    if missing_cols:
+        raise ValueError(f"Missing expected columns in unique_customers: {missing_cols}")
+
     customers_df = unique_customers[["name", "address", "phone", "ssn"]].copy()
     customers_df = tag_dataframe(customers_df, MIGRATION_RUN_ID)
     batch_insert(customers_df, "customers", engine, session=session)
@@ -236,6 +337,9 @@ def load_customers_accounts(csv_path: str):
 
     accounts_df = tag_dataframe(accounts_df, MIGRATION_RUN_ID)
     batch_insert(accounts_df, "accounts", engine, session=session)
+
+
+
 
 def ensure_transaction_locations_exist(pdf: pd.DataFrame, session=None) -> pd.DataFrame:
     location_cols = ["sender_country", "sender_municipality", "receiver_country", "receiver_municipality"]
