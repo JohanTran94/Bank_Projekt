@@ -1,36 +1,21 @@
-import csv
 import re
 
 
-def format_phone_number(phone):
-    """Ser till att telefonnumret börjar med +46 och tar bort otillåtna specialtecken."""
-    phone = re.sub(r"[^\d+]", "", phone)  # Tar bort allt utom siffror och "+"
+class PhoneFormatter:
+    """Klass för att hantera och validera telefonnummer"""
 
-    if not phone.startswith("+46"):
-        if phone.startswith("0"):
-            phone = "+46" + phone[1:]  # Byt ut inhemskt format till +46
-        else:
-            phone = "+46" + phone  # Lägg till landskod
+    @staticmethod
+    def clean_phone_number(phone: str) -> str:
+        """Tar bort specialtecken och ser till att numret endast innehåller siffror och +"""
+        return re.sub(r"[^0-9+]", "", phone)
 
-    return phone
+    @staticmethod
+    def format_phone(phone: str, account_number: str) -> str:
+        """Formaterar telefonnummer korrekt enligt regler"""
+        phone = PhoneFormatter.clean_phone_number(phone)
 
+        # Lägg endast till +46 om det saknas och kontot börjar med SE8902
+        if account_number.startswith("SE8902") and not phone.startswith("+46"):
+            phone = "+46" + phone.lstrip("0")
 
-# Läs och justera CSV-filen
-input_file = "bank_data.csv"  # Din CSV-fil
-output_file = "formatted_bank_data.csv"
-
-with open(input_file, mode="r", encoding="utf-8") as infile, open(output_file, mode="w", encoding="utf-8",
-                                                                  newline='') as outfile:
-    reader = csv.reader(infile)
-    writer = csv.writer(outfile)
-
-    header = next(reader)  # Läs första raden (rubriker)
-    writer.writerow(header)
-
-    for row in reader:
-        if row[4].startswith("SE8902"):  # Kontrollera om kontonumret börjar med SE8902
-            row[2] = format_phone_number(row[2])  # Använd regex för att rensa och formatera telefonnumret
-
-        writer.writerow(row)
-
-print("Filformatering klar! Data sparad i", output_file)
+        return phone

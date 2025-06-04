@@ -13,6 +13,8 @@ import uuid
 from alembic.config import Config
 from alembic import command
 from collections import defaultdict
+from phone_formatter import PhoneFormatter  # importera klassen
+
 
 MIGRATION_RUN_ID = uuid.uuid4()
 error_counts = defaultdict(int)
@@ -172,6 +174,11 @@ def load_customers_accounts(csv_path: str):
         log_error_row("load_customers_accounts", "Missing required fields", row.to_dict(), "invalid_customers.csv")
 
     pdf = valid_rows.compute()
+
+    # Formatera telefonnummer med PhoneFormatter innan insert
+    pdf["phone"] = pdf.apply(
+        lambda r: PhoneFormatter.format_phone(r["phone"], r["account_number"]), axis=1
+    )
 
     unique_customers = pdf.drop_duplicates(subset="ssn").copy()
     customers_df = unique_customers[["name", "address", "phone", "ssn"]].copy()
