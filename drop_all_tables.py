@@ -16,7 +16,7 @@ def drop_all_tables():
     cursor.execute("GRANT ALL ON SCHEMA public TO postgres;")
     cursor.execute("GRANT ALL ON SCHEMA public TO public;")
 
-    print("✅ All tables in the 'public' schema have been dropped.")
+    print("🟢 All tables in the 'public' schema have been dropped.")
 
     # Close cursor and connection
     cursor.close()
