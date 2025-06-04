@@ -12,10 +12,6 @@ def drop_all_tables():
     # Recreate the 'public' schema
     cursor.execute("CREATE SCHEMA public;")
 
-    # Restore default privileges (optional but recommended)
-    cursor.execute("GRANT ALL ON SCHEMA public TO postgres;")
-    cursor.execute("GRANT ALL ON SCHEMA public TO public;")
-
     print("🟢 All tables in the 'public' schema have been dropped.")
 
     # Close cursor and connection
