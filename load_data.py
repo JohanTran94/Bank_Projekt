@@ -1,19 +1,67 @@
-import os
-import dask.dataframe as dd
-import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
+from collections import defaultdict
 from datetime import datetime
-import json
-from models import ErrorRow, MigrationRun
-from dotenv import load_dotenv
 from pathlib import Path
 import uuid
+import json
+import csv
+import os
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 from alembic.config import Config
+import dask.dataframe as dd
+from dotenv import load_dotenv
 from alembic import command
-from collections import defaultdict
+import pandas as pd
 from tqdm import tqdm
+
+from models import ErrorRow, MigrationRun
+
+def detect_csv_type(csv_path: Path) -> str:
+    """
+    Inspect the header row of a CSV file to determine its data type.
+
+    Parameters:
+        csv_path (Path): The path to the CSV file to inspect.
+
+    Returns:
+        str: A string indicating the file type:
+             - 'customers_accounts' if the CSV matches the customer/account schema,
+             - 'transactions' if it matches the transactions schema,
+             - 'unknown' otherwise.
+    """
+
+    with open(csv_path, newline='', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        headers = next(reader)  # Read the first line as header
+
+    # Normalize headers to lowercase and strip whitespace for robust comparison
+    headers_lower = [h.strip().lower() for h in headers]
+    headers_set = set(headers_lower)
+
+    # Define expected columns for customer/account files
+    customer_cols = {"customer", "address", "phone", "personnummer", "bankaccount"}
+
+    # Define expected columns for transaction files
+    transaction_cols = {
+        "transaction_id", "timestamp", "amount", "currency", "sender_account", "receiver_account",
+        "sender_country", "sender_municipality", "receiver_country", "receiver_municipality",
+        "transaction_type", "notes"
+    }
+
+    # Check if the header contains all required columns for customers/accounts
+    if customer_cols.issubset(headers_set):
+        return "customers_accounts"
+
+    # Check if the header contains all required columns for transactions
+    elif transaction_cols.issubset(headers_set):
+        return "transactions"
+
+    else:
+        print("🔴 Unknown CSV structure: headers do not match expected schemas.")
+        return "unknown"
+
 
 MIGRATION_RUN_ID = uuid.uuid4()
 error_counts = defaultdict(int)
@@ -152,6 +200,7 @@ def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500, session=N
             print(f"\n🔴 Error during batch_insert into table '{table}': {e}\n")
             if session:
                 session.rollback()
+
 
 def load_customers_accounts(csv_path: str):
     df = dd.read_csv(csv_path, dtype=str, assume_missing=True)
@@ -297,10 +346,23 @@ if __name__ == "__main__":
     print(f"🟡 Starting ETL process, run ID: {MIGRATION_RUN_ID}")
 
     try:
-        print("🟡 Loading customers and accounts...")
-        load_customers_accounts("data/sebank_customers_with_accounts-5000-10000.csv")
-        print("🟡 Loading transactions...")
-        load_transactions("data/transactions-500000.csv")
+        data_path = Path("data")
+        csv_files = sorted(data_path.glob("*.csv"))
+
+        for csv_file in csv_files:
+            print(f"\n🟡 Inspecting file: {csv_file.name}")
+            file_type = detect_csv_type(csv_file)
+
+            if file_type == "customers_accounts":
+                print(f"🟡 Loading customers and accounts from {csv_file.name}...")
+                load_customers_accounts(str(csv_file))
+
+            elif file_type == "transactions":
+                print(f"🟡 Loading transactions from {csv_file.name}...")
+                load_transactions(str(csv_file))
+
+            else:
+                print(f"🔴️ Unknown CSV structure in file {csv_file.name}. Skipping this file.")
 
         session.add(MigrationRun(id=MIGRATION_RUN_ID, description="Batch ETL import"))
         session.commit()
@@ -318,3 +380,4 @@ if __name__ == "__main__":
         session.rollback()
         print(f"🔴 Error during ETL process: {e}")
         raise
+
