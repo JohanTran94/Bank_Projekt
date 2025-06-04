@@ -11,7 +11,7 @@ from db import Db
 class Customer:
     accounts = []
 
-    def __init__(self): # konstruktor
+    def __init__(self): # constructor
         self.conn = Db().get_conn()
 
     def create(self, name, ssn):

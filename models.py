@@ -55,17 +55,18 @@ class TransactionLocation(Base):
 
     migration_run_id = Column(UUID(as_uuid=True), nullable=False, index=True)
 
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
     transaction_id = Column(String, primary_key=True)
     timestamp = Column(DateTime, index=True)
-    amount = Column(Numeric(12, 2))  # exakt för pengabelopp
+    amount = Column(Numeric(12, 2))  # exact representation for monetary values
     currency = Column(String(10))
 
     sender_account = Column(String, ForeignKey("accounts.account_number"), index=True)
 
-    # ❓ Optional: koppla även mottagarkonto om det kan vara internt
+    # Optional: also link receiver account if it may be internal
     receiver_account = Column(String, ForeignKey("accounts.account_number"), index=True)
 
     transaction_type = Column(String(50), index=True)

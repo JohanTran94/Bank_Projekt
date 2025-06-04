@@ -21,21 +21,21 @@ def tag_dataframe(df, run_id):
     df["migration_run_id"] = str(run_id)
     return df
 
-
 def create_alembic_revision_if_data_exists(alembic_cfg, description: str, run_id: uuid.UUID, session):
     from sqlalchemy import text
 
-    # Kontrollera om en revision redan finns med detta run_id i alembic_versions
     version_dir = Path("alembic/versions")
-    existing_files = list(version_dir.glob("*.py"))
     short_run_id = str(run_id)[:8]
-    existing_with_run_id = [f for f in existing_files if short_run_id in f.read_text()]
 
-    if existing_with_run_id:
-        print(f"⚠️ Alembic-revision för run_id {short_run_id} finns redan. Hoppar över.")
-        return
+    # Look for existing revision files that contain the short run_id in their content
+    for file_path in version_dir.glob("*.py"):
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            if short_run_id in content:
+                print(f"🟡 Alembic revision for run_id {short_run_id} already exists in {file_path.name}. Skipping.")
+                return
 
-    # Kontrollera om det finns data med detta run_id
+    # Check if data with this run_id exists in tables
     tables = ["customers", "accounts", "transactions", "transaction_locations"]
     data_found = False
 
@@ -44,54 +44,51 @@ def create_alembic_revision_if_data_exists(alembic_cfg, description: str, run_id
             text(f"SELECT COUNT(*) FROM {table} WHERE migration_run_id = :run_id"),
             {"run_id": str(run_id)}
         ).scalar()
-
         if count > 0:
             data_found = True
             break
 
     if not data_found:
-        print("⚠️ Ingen data med detta run_id hittades – hoppar över Alembic-revision.")
+        print("🟡 No data with this run_id found – skipping Alembic revision.")
         return
 
-    # Skapa revision
+    # Create new Alembic revision file
     message = f"ETL {short_run_id}"
     command.revision(alembic_cfg, message=message, autogenerate=False)
 
-    revision_path = sorted(version_dir.glob("*.py"), key=os.path.getmtime)[-1]
+    # Find the newest revision file (just created)
+    revision_files = list(version_dir.glob("*.py"))
+    revision_path = max(revision_files, key=os.path.getmtime)
 
-    run_id_str = str(run_id)
-
-    # Lägg till run_id i docstring (efter första """-block)
+    # Insert run_id inside the revision file (after first docstring)
     with open(revision_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     for i, line in enumerate(lines):
         if '"""' in line:
-            lines.insert(i + 1, f"Run ID: {run_id_str}\n")
+            lines.insert(i + 1, f"Run ID: {run_id}\n")
             break
 
     with open(revision_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
+    # Append upgrade/downgrade functions with delete statements filtered by run_id
     content = f"""
 
 def upgrade():
-    print("Data load completed externally. Run ID: {run_id_str}")
+    print("Data load completed externally. Run ID: {run_id}")
 
 def downgrade():
     from alembic import op
     conn = op.get_bind()
-    conn.execute("DELETE FROM transactions WHERE migration_run_id = '{run_id_str}'")
-    conn.execute("DELETE FROM accounts WHERE migration_run_id = '{run_id_str}'")
-    conn.execute("DELETE FROM customers WHERE migration_run_id = '{run_id_str}'")
-    conn.execute("DELETE FROM transaction_locations WHERE migration_run_id = '{run_id_str}'")
+    conn.execute("DELETE FROM transactions WHERE migration_run_id = '{run_id}'")
+    conn.execute("DELETE FROM accounts WHERE migration_run_id = '{run_id}'")
+    conn.execute("DELETE FROM customers WHERE migration_run_id = '{run_id}'")
+    conn.execute("DELETE FROM transaction_locations WHERE migration_run_id = '{run_id}'")
 """
+
     with open(revision_path, "a", encoding="utf-8") as f:
         f.write(content)
-
-    command.upgrade(alembic_cfg, "head")
-    print("✅ Alembic-revision skapad och uppgraderad till head.")
-
 
 os.chdir(Path(__file__).resolve().parent)
 load_dotenv()
@@ -149,7 +146,7 @@ def batch_insert(df: pd.DataFrame, table: str, engine, chunk_size=500, session=N
         try:
             chunk.to_sql(table, con=engine, if_exists="append", index=False, method="multi")
         except IntegrityError as e:
-            print(f"\nFel vid batch_insert i tabell '{table}': {e}\n")
+            print(f"\n🔴 Error during batch_insert into table '{table}': {e}\n")
             if session:
                 session.rollback()
 
@@ -294,12 +291,12 @@ def load_transactions(csv_path: str):
     batch_insert(transactions_df, "transactions", engine, chunk_size=500)
 
 if __name__ == "__main__":
-    print(f"🚀 Startar ETL, run ID: {MIGRATION_RUN_ID}")
+    print(f"Starting ETL process, run ID: {MIGRATION_RUN_ID}")
 
     try:
-        print("Laddar kunder och konton...")
+        print("Loading customers and accounts...")
         load_customers_accounts("data/sebank_customers_with_accounts.csv")
-        print("Laddar transaktioner...")
+        print("Loading transactions...")
         load_transactions("data/transactions.csv")
 
         session.add(MigrationRun(id=MIGRATION_RUN_ID, description="Batch ETL import"))
@@ -308,13 +305,13 @@ if __name__ == "__main__":
         alembic_cfg = Config("alembic.ini")
         create_alembic_revision_if_data_exists(alembic_cfg, "Batch ETL import", MIGRATION_RUN_ID, session)
 
-        print("✅ Dataimport färdig.")
+        print("🟢 Data import complete.")
 
-        print("\n📊 Felstatistik:")
+        print("\n🔵 Error statistics:")
         for reason, count in error_counts.items():
-            print(f" - {reason}: {count} st")
+            print(f" - {reason}: {count} entries")
 
     except Exception as e:
         session.rollback()
-        print(f"❌ Fel under ETL: {e}")
+        print(f"🔴 Error during ETL process: {e}")
         raise
