@@ -1,6 +1,10 @@
-
-
-
+alembic.ini
+db.py
+.env
+_logs/
+.idea/*
+!.idea/misc.xml
+!.idea/modules.xml
 
 
 # Byte-compiled / optimized / DLL files
