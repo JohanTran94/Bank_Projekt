@@ -1,11 +1,47 @@
-python-dotenv~=1.1.0
-psycopg2~=2.9.10
-psycopg2-binary~=2.9.10
-psycopg2.extras
-SQLAlchemy~=2.0.41
-alembic~=1.16.1
-pandas~=2.1.4
-prefect~=3.4.4.dev1
-dask~=2025.5.1
-great-expectations~=1.4.5
-pyarrow>=15.0.0
+# --- Web & API ---
+fastapi==0.115.12
+uvicorn==0.34.2
+starlette==0.46.2
+
+# --- Databaser ---
+SQLAlchemy==2.0.41
+alembic==1.16.1
+asyncpg==0.30.0
+aiosqlite==0.21.0
+psycopg2-binary==2.9.10
+
+# --- Data & analys ---
+pandas==2.1.4
+numpy==1.26.4
+scipy==1.15.3
+dask==2025.5.1
+pyarrow==15.0.0
+altair==4.2.2
+python-dateutil==2.9.0.post0
+pendulum==3.1.0
+humanize==4.12.3
+
+# --- Validering ---
+pydantic==2.11.5
+pydantic-settings==2.9.1
+great-expectations==1.4.5
+python-slugify==8.0.4
+python-dotenv==1.1.0
+
+# --- Verktyg & övrigt ---
+requests==2.32.3
+httpx==0.28.1
+orjson==3.10.18
+backoff==2.2.1
+arrow==1.3.0
+
+# --- Utveckling & test ---
+pytest==8.4.0
+black==24.4.2
+isort==5.13.2
+mypy==1.10.0
+ipython==9.3.0
+ipykernel==6.29.5
+jupyterlab==4.4.3
+rich==14.0.0
+types-python-dateutil==2.9.0.20250516
