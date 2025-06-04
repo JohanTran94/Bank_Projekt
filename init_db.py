@@ -38,7 +38,6 @@ if __name__ == "__main__":
                     version_num TEXT NOT NULL PRIMARY KEY
                 );
             """))
-            print("🟢 'alembic_version' table created successfully")
     except SQLAlchemyError as e:
         print(f"🔴 Failed to create 'alembic_version' table: {e}")
         exit(1)

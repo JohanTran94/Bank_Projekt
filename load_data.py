@@ -291,13 +291,13 @@ def load_transactions(csv_path: str):
     batch_insert(transactions_df, "transactions", engine, chunk_size=500)
 
 if __name__ == "__main__":
-    print(f"Starting ETL process, run ID: {MIGRATION_RUN_ID}")
+    print(f"🟡 Starting ETL process, run ID: {MIGRATION_RUN_ID}")
 
     try:
-        print("Loading customers and accounts...")
-        load_customers_accounts("data/sebank_customers_with_accounts.csv")
-        print("Loading transactions...")
-        load_transactions("data/transactions.csv")
+        print("🟡 Loading customers and accounts...")
+        load_customers_accounts("data/sebank_customers_with_accounts-5000-10000.csv")
+        print("🟡 Loading transactions...")
+        load_transactions("data/transactions-500000.csv")
 
         session.add(MigrationRun(id=MIGRATION_RUN_ID, description="Batch ETL import"))
         session.commit()
