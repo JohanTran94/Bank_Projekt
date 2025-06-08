@@ -116,28 +116,6 @@ ETL operations are wrapped in SQL transactions. If an error occurs, changes are 
 
 Rollbacks are handled using try/except blocks and context-managed connections. Errors are logged to the error_rows table and the _logs/ directory.
 
-
-
-### Testing with Pytest
-
-We use **Pytest** to test the core logic of the ETL pipeline, including data transformations, database interactions, and validation routines.
-
-To run tests:
-
-```bash
-pytest tests/
-```
-
-Highlights:
-- Mocked database sessions using fixtures
-- Tests for each transformation function
-- Integration tests for full ETL runs using test databases
-- Parametrized validation rules with Great Expectations
-
->  Recommended: Run tests in an isolated environment or test database to avoid affecting production data.
-
----
-
 ## License
 
 MIT License
